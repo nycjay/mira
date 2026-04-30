@@ -1006,12 +1006,21 @@ def _format_comment_body(comment: ReviewComment, bot_name: str = "miracodeai") -
 
     if comment.agent_prompt:
         import html as _html_mod
+        import re as _re
 
         prompt_text = comment.agent_prompt
         if comment.suggestion:
             clean = _html_mod.unescape(comment.suggestion)
             prompt_text += f"\n\nApply this code change:\n\n{clean}"
-        escaped_prompt = _html_mod.escape(prompt_text)
+
+        # Use a markdown code fence (not <pre>) so GitHub renders the copy
+        # button on the block. Fence length must be longer than any run of
+        # backticks in the content — the standard markdown escape trick.
+        max_run = max(
+            (len(m.group(0)) for m in _re.finditer(r"`+", prompt_text)),
+            default=0,
+        )
+        fence = "`" * max(3, max_run + 1)
         parts.append("")
         parts.append("---")
         parts.append("")
@@ -1019,7 +1028,7 @@ def _format_comment_body(comment: ReviewComment, bot_name: str = "miracodeai") -
             "<details>\n"
             "<summary>Prompt for AI Agents</summary>\n"
             "\n"
-            f"<pre>{escaped_prompt}</pre>\n"
+            f"{fence}\n{prompt_text}\n{fence}\n"
             "\n"
             "</details>"
         )

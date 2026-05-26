@@ -95,10 +95,8 @@ _MAX_FULL_FILE_LINES = 500
 _LARGE_FILE_CONTEXT_LINES = 50  # ±50 lines = 100-line window
 
 
-# Path patterns where security findings are extremely unlikely. Used to
-# narrow the dedicated security pass — see _security_review_pass. We keep
-# this conservative: every excluded category is "shouldn't house auth /
-# crypto / origin / injection logic." When uncertain, keep the file.
+# Paths excluded from the dedicated security pass — see _security_review_pass.
+# Keep conservative: anything that might house auth/crypto/origin/injection logic stays in.
 _SECURITY_PASS_SKIP_PATTERNS = (
     # DB migrations: schema changes, indexes — no request handling.
     "db/migrate/",
@@ -197,7 +195,6 @@ def _select_files_by_priority(
     for f in files:
         if only_paths is not None and f.path not in only_paths:
             continue
-        # Per-file size estimate: the diff text length for this file.
         file_diff_text_len = sum(len(h.content) for h in f.hunks)
         if file_diff_text_len > max_per_file_size:
             skipped.append((f.path, f"file diff too large ({file_diff_text_len} chars)"))
@@ -265,10 +262,8 @@ def _short_thread_description(body: str) -> str:
     body = body or ""
     for line in body.splitlines():
         s = line.strip()
-        # Skip badge/category lines (e.g. "🐛 **Bug**", "⚠️ Warning")
         if not s or s.startswith(("⚠️", "🐛", "💡", "🔒", "⚡", "🛑", "🔵", "🟡", "🟠", "🔴")):
             continue
-        # Pure-bold title line is the canonical short description
         if s.startswith("**") and s.endswith("**") and len(s) > 4:
             return s.strip("* ")[:160]
         return s[:160]
@@ -286,14 +281,12 @@ def _extract_sections(
     """
     total = len(lines)
     width = len(str(total))
-    # Collect (start, end) ranges for each thread
     ranges: list[tuple[int, int]] = []
     for t in threads:
         start = max(0, t.line - 1 - context_lines)
         end = min(total, t.line - 1 + context_lines + 1)
         ranges.append((start, end))
 
-    # Sort and merge overlapping ranges
     ranges.sort()
     merged: list[tuple[int, int]] = [ranges[0]]
     for start, end in ranges[1:]:
@@ -303,7 +296,6 @@ def _extract_sections(
         else:
             merged.append((start, end))
 
-    # Build snippet with original line numbers
     parts: list[str] = []
     for start, end in merged:
         numbered = [f"{i + 1:>{width}}| {lines[i]}" for i in range(start, end)]
@@ -327,24 +319,11 @@ class ReviewEngine:
         self.provider = provider
         self.bot_name = bot_name
         self.dry_run = dry_run
-        # Set during _build_context.
-        #
-        # `_jit_needed` is True when the index store has no summaries for
-        # the *changed files in this PR* — controls JIT cross-file lookup
-        # and the agentic tool-use path. This fires regularly even on a
-        # well-indexed repo (e.g. a PR touching only README.md, which the
-        # indexer skips), so it must NOT be used to tell the user "your
-        # repo isn't indexed."
-        #
-        # `_index_was_empty` is True only when the index store has NO data
-        # at all for this repo — that's the actual "this repo hasn't been
-        # indexed" signal that drives the walkthrough nudge.
+        # `_jit_needed` (per-PR: index has no summaries for *this PR's* files)
+        # is not the same as `_index_was_empty` (whole-repo: no data at all).
+        # Only the latter drives the user-visible "your repo isn't indexed" nudge.
         self._jit_needed = False
         self._index_was_empty = False
-        # Captured during _build_context for the agentic tool-use path: a
-        # source fetcher and the repo tree at PR head. Both already needed
-        # for JIT, so reusing them is free. None when no provider/PR is
-        # attached (CLI / dry-run).
         self._agentic_source_fetcher: object | None = None
         self._agentic_repo_tree: list[str] = []
 
@@ -357,15 +336,11 @@ class ReviewEngine:
         if not self.provider:
             return None
         placeholder = f"{WALKTHROUGH_MARKER}\n## Mira PR Walkthrough\n\n*🔍 Reviewing this PR…*\n"
-        # Reuse an existing walkthrough comment if one exists (e.g. on
-        # synchronize events where a review posted previously).
         existing_id = await self.provider.find_bot_comment(pr_info, WALKTHROUGH_MARKER)
         if existing_id is not None:
             await self.provider.update_comment(pr_info, existing_id, placeholder)
             return existing_id
         await self.provider.post_comment(pr_info, placeholder)
-        # Re-fetch to get the ID of the comment we just posted. post_comment
-        # doesn't return one, and this keeps the provider interface narrow.
         return await self.provider.find_bot_comment(pr_info, WALKTHROUGH_MARKER)
 
     async def review_pr(self, pr_url: str) -> ReviewResult:
@@ -406,8 +381,6 @@ class ReviewEngine:
             1 for line in diff_text.splitlines() if line.startswith("+") or line.startswith("-")
         )
 
-        # Post a placeholder using the walkthrough marker so users see activity
-        # immediately and find_bot_comment can locate the comment as a fallback.
         placeholder_id: int | None = None
         if not self.dry_run:
             try:
@@ -416,8 +389,6 @@ class ReviewEngine:
                 logger.warning("Failed to post walkthrough placeholder: %s", exc)
 
         async def _on_walkthrough_ready(wt: WalkthroughResult | None) -> None:
-            """Update the placeholder with the walkthrough the moment the LLM
-            call resolves — typically before chunked review completes."""
             if self.dry_run or wt is None or placeholder_id is None:
                 return
             try:
@@ -429,11 +400,8 @@ class ReviewEngine:
             except Exception as exc:
                 logger.warning("Failed to post in-progress walkthrough: %s", exc)
 
-        # Detect review round and surface resolved threads as context. Round
-        # 1 is the first time the bot reviews; round 2+ raises the comment
-        # threshold so we converge instead of dripping new findings on every
-        # push. Resolved-thread paths are passed to the prompt as "already
-        # addressed — don't re-flag this area".
+        # Round 2+ raises the comment threshold so we converge instead of
+        # dripping new findings on every push.
         review_round = 1
         resolved_thread_dicts: list[dict] = []
         try:
@@ -456,8 +424,7 @@ class ReviewEngine:
         except Exception as exc:
             logger.warning("Failed to compute review round: %s", exc)
 
-        # Round 2+: fetch only commits since the last review so we don't
-        # re-flag untouched files as if we withheld findings the first time.
+        # Round 2+ uses incremental diff to avoid re-flagging untouched files.
         if review_round >= 2 and pr_info.head_sha:
             try:
                 from mira.dashboard.api import _app_db
@@ -485,7 +452,6 @@ class ReviewEngine:
                         )
                         diff_text = incremental
                     else:
-                        # Same head SHA or empty diff — nothing new to review.
                         logger.info(
                             "Round %d: no new commits since %s on PR %s, skipping review",
                             review_round,
@@ -520,18 +486,10 @@ class ReviewEngine:
             team_conventions=team_conventions,
         )
 
-        # Final walkthrough update with real review stats. Tighten confidence
-        # now that we know what the review found — the initial LLM score
-        # predates the chunked review.
-        #
-        # Wait for the in-progress walkthrough update to finish before posting
-        # the final one. If we don't, the in-progress write can land after
-        # this final one (race lands reliably on PRs with zero comments where
-        # chunk review is faster than a GitHub API write), leaving the
-        # comment stuck on "Code review in progress…".
+        # The final walkthrough must land after the in-progress one, or it gets
+        # overwritten on fast PRs and stays stuck on "in progress".
         notify_task = getattr(self, "_walkthrough_notify_task", None)
         if notify_task is not None:
-            # Already logged inside the task; just proceed to final post.
             with contextlib.suppress(Exception):
                 await notify_task
 
@@ -579,8 +537,6 @@ class ReviewEngine:
                         index_was_empty=getattr(self, "_index_was_empty", False),
                         dashboard_url=_os.environ.get("MIRA_DASHBOARD_URL", ""),
                     )
-                    # Prefer the known placeholder ID. Fall back to marker-based
-                    # lookup if the placeholder never posted (network blip, etc.).
                     comment_id = placeholder_id
                     if comment_id is None:
                         comment_id = await self.provider.find_bot_comment(
@@ -647,9 +603,8 @@ class ReviewEngine:
                 logger.debug("Feedback synthesis failed: %s", synth_err)
             store.close()
 
-            # Persist per-PR review progress so `@mira-bot review-rest` can
-            # later target the unreviewed paths. Merges with prior progress
-            # when the same PR has already been partially reviewed.
+            # Merge with any prior progress for this PR so @mira-bot review-rest
+            # can target only the still-unreviewed paths.
             try:
                 from mira.dashboard.api import _app_db
                 from mira.dashboard.db import PRReviewProgress
@@ -659,9 +614,6 @@ class ReviewEngine:
                     pr_info.repo,
                     pr_info.number,
                 )
-                # Merge: union of reviewed paths + remember newly skipped paths.
-                # If a path was skipped previously and reviewed now, drop it
-                # from the skipped list.
                 prior_reviewed = set(prior.reviewed_paths) if prior else set()
                 prior_skipped = set(prior.skipped_paths) if prior else set()
                 new_reviewed = prior_reviewed | set(result.reviewed_paths)
@@ -682,10 +634,8 @@ class ReviewEngine:
         except Exception as exc:
             logger.debug("Failed to record review event: %s", exc)
 
-        # Always anchor the SHA after a successful review — including rounds
-        # that found zero comments. Otherwise round 2 has no SHA to diff
-        # against and falls back to a full review, which is the bug we're
-        # trying to avoid.
+        # Anchor the SHA even on zero-finding rounds; without it round 2 has
+        # nothing to compare against and falls back to a full review.
         if pr_info.head_sha:
             try:
                 from mira.dashboard.api import _app_db
@@ -727,8 +677,8 @@ class ReviewEngine:
         """
         import asyncio as _asyncio
 
-        # Parse the full diff first — we want to know about every file before
-        # we decide what to skip, so the user sees the complete picture.
+        # Parse the full diff (not just the priority-selected subset) so the
+        # walkthrough can surface skipped files to the user.
         patch = parse_diff(diff_text)
         if not patch.files:
             return ReviewResult(summary="No files to review.")
@@ -740,9 +690,6 @@ class ReviewEngine:
                 skipped_reason="All files matched exclusion rules",
             )
 
-        # Priority-rank and select files until we hit the size cap. Files that
-        # don't fit are listed in skipped_files so the walkthrough banner can
-        # surface them and the user can invoke `@mira-bot review-rest`.
         only_paths = getattr(self, "_review_only_paths", None)
         selected, skipped = _select_files_by_priority(
             filtered,
@@ -768,7 +715,6 @@ class ReviewEngine:
                 len(skipped),
             )
 
-        # filtered is the full ranked set; selected is what we'll actually review
         filtered = selected
 
         async def _generate_walkthrough() -> WalkthroughResult | None:
@@ -852,8 +798,6 @@ class ReviewEngine:
                         except Exception as exc:
                             logger.debug("JIT context build failed: %s", exc)
 
-                    # Append cross-repo impact so inline reviews know about
-                    # other repositories that depend on the changed code.
                     try:
                         from mira.index.relationships import RelationshipStore
 
@@ -886,17 +830,12 @@ class ReviewEngine:
                 logger.warning("Code context lookup failed, continuing without: %s", exc)
             return ""
 
-        # Fire walkthrough as its own task so the caller can post it early
-        # via on_walkthrough_ready. Code context is still awaited here because
-        # chunks depend on it.
+        # Fire walkthrough early so review_pr can post it before chunk review finishes.
         walkthrough_task = _asyncio.create_task(_generate_walkthrough())
 
-        # The notify task is referenced on `self` so the caller (review_pr)
-        # can await it before its own final update — without this, a slow
-        # in-progress update can land *after* the final update on PRs with
-        # zero review comments (chunk review finishes faster than the
-        # callback's GitHub API write), leaving the comment stuck on
-        # "Code review in progress…".
+        # `_walkthrough_notify_task` exposed on self so review_pr can await it
+        # before its own final write — otherwise the in-progress update can land
+        # after the final one on fast PRs (see review_pr).
         self._walkthrough_notify_task = None
         if on_walkthrough_ready is not None:
 
@@ -909,7 +848,6 @@ class ReviewEngine:
 
             self._walkthrough_notify_task = _asyncio.create_task(_notify_caller())
 
-        # No-op on CLI / dry-run runs that have no provider.
         async def _fetch_file_history() -> dict:
             pr_info = getattr(self, "_pr_info", None)
             if pr_info is None or self.provider is None:
@@ -929,17 +867,14 @@ class ReviewEngine:
             _fetch_file_history(),
         )
 
-        # Expand context
         expanded = expand_context(filtered, self.config.review.context_lines)
 
-        # Chunk
         chunks = chunk_files(
             expanded,
             max_tokens=self.config.llm.max_context_tokens,
             provider=self.llm,
         )
 
-        # Fetch learned rules + custom rules for prompt injection
         learned_rules: list[str] = []
         custom_rules: list[dict[str, str]] = []
         try:
@@ -949,13 +884,11 @@ class ReviewEngine:
 
                 learned_rules = _rules_store.get_learned_rules_text()
 
-                # Per-repo custom rules
                 for ctx in _rules_store.list_review_context():
                     custom_rules.append({"title": ctx.title, "content": ctx.content})
 
                 _rules_store.close()
 
-                # Global rules
                 try:
                     from mira.dashboard.db import AppDatabase
 
@@ -970,7 +903,6 @@ class ReviewEngine:
         except Exception:
             pass
 
-        # Review chunks in parallel
         valid_paths = {f.path for f in filtered}
         base_existing = list(existing_comments) if existing_comments else []
         semaphore = _asyncio.Semaphore(self.config.review.max_concurrent_chunks)
@@ -1005,9 +937,6 @@ class ReviewEngine:
                         team_conventions=team_conventions,
                     )
                     raw_response = ""
-                    # Use the per-PR `_jit_needed` (not the whole-repo
-                    # `_index_was_empty`) so files the indexer skipped still get
-                    # the agentic fallback inside an otherwise-indexed repo.
                     use_agentic = (
                         self.config.review.agentic_tools
                         and getattr(self, "_jit_needed", False)
@@ -1043,10 +972,6 @@ class ReviewEngine:
                     )
                     return [], [], ""
 
-        # Run the main chunked review and the security pass in parallel.
-        # Security findings get merged into all_comments and go through the
-        # same noise filter (dedup catches any overlap with main-pass
-        # findings on the same line).
         review_task = _asyncio.gather(*[_review_chunk(i, c) for i, c in enumerate(chunks)])
         security_task = _asyncio.create_task(
             self._security_review_pass(filtered, pr_title)
@@ -1067,17 +992,14 @@ class ReviewEngine:
 
         all_comments = [classify_severity(c) for c in all_comments]
 
-        # Noise filter — pass review_round so round 2+ raises the floor.
         final_comments = filter_noise(
             all_comments,
             self.config.filter,
             review_round=review_round,
         )
 
-        # Self-critique pass — re-verify each draft comment before posting.
-        # Catches confident-but-wrong claims (the LLM's own analysis errors)
-        # that the noise filter can't catch because confidence scores are
-        # also LLM-generated. Runs on the configured indexing model.
+        # Self-critique catches confident-but-wrong claims that the noise
+        # filter can't, since confidence scores are LLM-generated too.
         if final_comments and self.config.review.self_critique:
             try:
                 final_comments = await self._self_critique(final_comments)
@@ -1088,11 +1010,8 @@ class ReviewEngine:
 
         if self.config.review.include_summary:
             original_summary = " ".join(summaries) if summaries else ""
-            # Regenerate the summary from the FINAL filed outputs so the prose
-            # cannot mention issues that aren't backed by an inline comment or
-            # key_issue. The first-pass summary may reference findings the LLM
-            # noticed but didn't file — or that got dropped by noise filter /
-            # self-critique / orphan filter — and that mismatch confuses readers.
+            # Regenerate from the FINAL filed outputs so summary prose can't
+            # claim issues that were dropped by the filter/critique passes.
             try:
                 summary = await self._regenerate_summary(
                     final_comments,
@@ -1107,7 +1026,6 @@ class ReviewEngine:
         else:
             summary = ""
 
-        # Walkthrough task may have finished long ago; this just collects it.
         walkthrough = await walkthrough_task
 
         return ReviewResult(
@@ -1144,9 +1062,6 @@ class ReviewEngine:
         from mira.llm.provider import SUBMIT_REVIEW_TOOL
 
         tools = [*AGENTIC_TOOLS, SUBMIT_REVIEW_TOOL]
-        # Augment the existing system message with a brief note on tool use.
-        # Putting it inline keeps prompt structure intact for the rest of
-        # the flow (parsing, summary regen, etc.).
         convo: list[dict] = [dict(m) for m in messages]
         if convo and convo[0].get("role") == "system":
             convo[0]["content"] = (
@@ -1174,7 +1089,6 @@ class ReviewEngine:
             content = msg.get("content") or ""
 
             if not tool_calls:
-                # The model ended without calling submit_review — fall back.
                 logger.debug(
                     "Agentic loop exited at hop %d without submit_review (content=%d chars)",
                     hop + 1,
@@ -1182,7 +1096,6 @@ class ReviewEngine:
                 )
                 return ""
 
-            # Append the assistant message verbatim so tool_call_ids resolve.
             convo.append(
                 {
                     "role": "assistant",
@@ -1241,27 +1154,15 @@ class ReviewEngine:
         if not files:
             return []
 
-        # Narrow input to files where security findings are plausible.
-        # On large diffs, migrations / lockfiles / fixtures / tests drown
-        # out the actual vulnerable code. With them in the prompt the model
-        # can miss explicit patterns (`X-Frame-Options: "ALLOWALL"`) that
-        # the prompt's category list calls out by name.
-        narrowed = _security_relevant_files(files)
-        if not narrowed:
-            # All files were filtered out — fall back to the original set
-            # rather than skip the pass entirely. A PR that's purely
-            # migrations / specs CAN still introduce auth/permission bugs.
-            narrowed = files
+        # Strip migrations / lockfiles / specs so the model isn't distracted from
+        # the actual vulnerable code; on an all-noise PR, fall back to the full set.
+        narrowed = _security_relevant_files(files) or files
 
         from mira.config import load_config
         from mira.dashboard.models_config import llm_config_for
         from mira.llm.prompts.review import build_security_review_prompt
         from mira.llm.provider import SUBMIT_REVIEW_TOOL, LLMProvider
 
-        # Build a security LLM on the indexing tier. If the config is
-        # missing the indexing model (or load_config raises in some
-        # exotic test setup), fall back to the main LLM rather than
-        # skip the pass entirely.
         try:
             base_config = load_config()
             security_llm = LLMProvider(llm_config_for("indexing", base_config.llm))
@@ -1276,12 +1177,7 @@ class ReviewEngine:
                 temperature=0.0,
             )
         except Exception as exc:
-            # The indexing-tier model can fail at call time even when
-            # construction succeeded (missing API key, model not routable
-            # by the provider, etc.). Retry on the main LLM rather than
-            # silently dropping the whole security pass — paying review-
-            # tier cost on this PR is the right tradeoff vs losing the
-            # findings.
+            # Retry on the main LLM rather than drop the security pass entirely.
             if security_llm is not self.llm:
                 logger.debug(
                     "Security pass on indexing tier failed (%s); retrying on review LLM",
@@ -1310,8 +1206,6 @@ class ReviewEngine:
             logger.warning("Security review pass conversion failed: %s", exc)
             return []
 
-        # Force category=security so the badge renders correctly even if the
-        # LLM put something else.
         for c in comments:
             if not c.category or c.category != "security":
                 c.category = "security"
@@ -1339,8 +1233,6 @@ class ReviewEngine:
         if not comments:
             return comments
 
-        # Build a compact draft block for the critic. We include the verbatim
-        # cited code so the critic can verify the claim against ground truth.
         draft_lines = []
         for i, c in enumerate(comments):
             cited = (c.existing_code or "").strip()
@@ -1371,9 +1263,6 @@ class ReviewEngine:
             "## Draft comments\n\n" + "\n".join(draft_lines)
         )
 
-        # Use the configured indexing model — critique is a verification
-        # task, not generation. Falls back to the review model if no
-        # indexing model is configured.
         try:
             base_config = load_config()
             critic_llm = LLMProvider(llm_config_for("indexing", base_config.llm))
@@ -1396,7 +1285,6 @@ class ReviewEngine:
             return comments
 
         keep_indices = {int(v["index"]) for v in verdicts if v.get("keep") is True}
-        # Log what got dropped so reviewers can audit calibration over time.
         for v in verdicts:
             if v.get("keep") is False and 0 <= int(v.get("index", -1)) < len(comments):
                 idx = int(v["index"])
@@ -1434,7 +1322,6 @@ class ReviewEngine:
         from mira.dashboard.models_config import llm_config_for
         from mira.llm.provider import LLMProvider
 
-        # Compact representation of what got filed.
         filed_lines = []
         for c in comments:
             filed_lines.append(f"- {c.path}:{c.line} [{c.severity.name} / {c.category}] {c.title}")
@@ -1497,7 +1384,6 @@ class ReviewEngine:
             pr_info.url,
         )
 
-        # Fetch current code for each thread's file (dedupe by path)
         file_contents: dict[str, str] = {}
         for t in threads:
             if t.path not in file_contents:
@@ -1505,7 +1391,6 @@ class ReviewEngine:
                     pr_info, t.path, pr_info.head_branch
                 )
 
-        # Group threads by file and build size-aware context
         threads_by_path: dict[str, list[UnresolvedThread]] = {}
         for t in threads:
             threads_by_path.setdefault(t.path, []).append(t)
@@ -1519,17 +1404,14 @@ class ReviewEngine:
             else:
                 has_unknown_lines = any(t.line <= 0 for t in path_threads)
                 if has_unknown_lines:
-                    # Can't extract targeted sections without valid line numbers
                     file_groups.append((path, _number_lines(content), path_threads))
                 else:
                     snippet = _extract_sections(lines, path_threads, _LARGE_FILE_CONTEXT_LINES)
                     file_groups.append((path, snippet, path_threads))
 
-        # Single LLM call to verify which issues are fixed
         verified_ids = await self._verify_fixes(file_groups)
         verified_set = set(verified_ids)
 
-        # Build per-thread decisions
         decisions = [
             ThreadDecision(
                 thread_id=t.thread_id,

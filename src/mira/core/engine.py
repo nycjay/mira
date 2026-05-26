@@ -6,13 +6,13 @@ import contextlib
 import logging
 from collections.abc import Awaitable, Callable
 
-from mira.analysis.noise_filter import filter_noise
 from mira.analysis.severity import classify_severity
 from mira.config import MiraConfig
 from mira.core.chunker import chunk_files
 from mira.core.context import expand_context
 from mira.core.diff_parser import parse_diff
 from mira.core.file_filter import filter_files
+from mira.core.noise_filter import filter_noise
 from mira.core.priority import rank_files
 from mira.exceptions import ResponseParseError
 from mira.index.context import build_code_context

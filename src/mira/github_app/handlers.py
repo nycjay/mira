@@ -17,7 +17,7 @@ from mira.dashboard.models_config import llm_config_for
 from mira.github_app.auth import GitHubAppAuth
 from mira.index.store import IndexStore
 from mira.llm import create_llm
-from mira.llm.prompts.conversation import build_conversation_prompt
+from mira.llm.prompts.review import build_conversation_prompt
 from mira.llm.provider import SUBMIT_THREAD_REPLY_TOOL
 from mira.models import PRInfo
 from mira.providers import create_provider

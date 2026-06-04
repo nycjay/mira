@@ -135,6 +135,11 @@ class ReviewConfig(BaseModel):
     # needs for Java/Go on the unindexed path when this is False.
     jit_java_go: bool = True
 
+    # Render the cross-repo "Blast Radius" section in the walkthrough comment.
+    # Lists dependent repos that import code touched by this PR. Disable to
+    # skip the relationship-store lookup and trim the walkthrough.
+    blast_radius: bool = True
+
 
 class ProviderConfig(BaseModel):
     type: str = "github"

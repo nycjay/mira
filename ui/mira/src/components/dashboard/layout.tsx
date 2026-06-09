@@ -17,7 +17,9 @@ import { useEffect, useState } from "react"
 import { NavLink, Outlet, useLocation } from "react-router"
 
 import { useTheme } from "@/components/theme-provider"
+import { api } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
+import { useAsync } from "@/lib/hooks"
 
 const API_BASE = import.meta.env.VITE_API_URL || ""
 
@@ -91,6 +93,25 @@ function AppBreadcrumb() {
   const location = useLocation()
   const parts = location.pathname.split("/").filter(Boolean)
 
+  // The /settings/webhooks/{id} segment is an opaque id — resolve it to the
+  // webhook's name so the breadcrumb reads "Webhooks / #eng-reviews", not a
+  // raw uuid. Only fetches on that route ({id} is null elsewhere).
+  const webhookId =
+    parts[0] === "settings" &&
+    parts[1] === "webhooks" &&
+    parts.length === 3 &&
+    parts[2] !== "new"
+      ? parts[2]
+      : null
+  const { data: webhookData } = useAsync(
+    () => (webhookId ? api.getWebhooks() : Promise.resolve(null)),
+    [webhookId]
+  )
+  const webhookName =
+    webhookId && webhookData
+      ? (webhookData.webhooks.find((w) => w.id === webhookId)?.name ?? null)
+      : null
+
   if (parts.length === 0) {
     return (
       <Breadcrumb>
@@ -103,7 +124,13 @@ function AppBreadcrumb() {
     )
   }
 
-  const label = (part: string) => PAGE_LABELS[part] || decodeURIComponent(part)
+  const label = (part: string, i: number) => {
+    if (parts[0] === "settings" && parts[1] === "webhooks" && i === 2) {
+      if (part === "new") return "New"
+      return webhookName || "Webhook"
+    }
+    return PAGE_LABELS[part] || decodeURIComponent(part)
+  }
 
   // /repos/{owner}/{repo} doesn't have a real /repos/{owner} route, so the
   // owner segment links back to the repos list with that owner pre-filtered.
@@ -122,9 +149,11 @@ function AppBreadcrumb() {
             {i > 0 && <BreadcrumbSeparator />}
             <BreadcrumbItem>
               {i === parts.length - 1 ? (
-                <BreadcrumbPage>{label(part)}</BreadcrumbPage>
+                <BreadcrumbPage>{label(part, i)}</BreadcrumbPage>
               ) : (
-                <BreadcrumbLink href={hrefFor(i)}>{label(part)}</BreadcrumbLink>
+                <BreadcrumbLink href={hrefFor(i)}>
+                  {label(part, i)}
+                </BreadcrumbLink>
               )}
             </BreadcrumbItem>
           </span>

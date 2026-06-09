@@ -188,6 +188,7 @@ export function DashboardLayout() {
                   <SidebarMenuItem key={item.to}>
                     <SidebarMenuButton
                       asChild
+                      tooltip={item.label}
                       className="aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-semibold aria-[current=page]:text-sidebar-accent-foreground"
                     >
                       <NavLink to={item.to} end={item.to === "/"}>

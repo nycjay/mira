@@ -65,11 +65,6 @@ export function WebhooksPage() {
   const labelFor = (value: string) =>
     events.find((e) => e.value === value)?.label ?? value
 
-  const toggleEnabled = async (w: Webhook) => {
-    await api.updateWebhook(w.id, { enabled: !w.enabled })
-    setRefreshKey((k) => k + 1)
-  }
-
   const remove = async (id: string) => {
     await api.deleteWebhook(id)
     setRefreshKey((k) => k + 1)
@@ -125,7 +120,6 @@ export function WebhooksPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Destination</TableHead>
                 <TableHead>Events</TableHead>
-                <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -163,20 +157,6 @@ export function WebhooksPage() {
                         </span>
                       )}
                     </div>
-                  </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      onClick={() => toggleEnabled(w)}
-                      title={w.enabled ? "Disable" : "Enable"}
-                      className="cursor-pointer"
-                    >
-                      {w.enabled ? (
-                        <Badge variant="secondary">Active</Badge>
-                      ) : (
-                        <Badge variant="outline">Disabled</Badge>
-                      )}
-                    </button>
                   </TableCell>
                   <TableCell
                     className="text-right"

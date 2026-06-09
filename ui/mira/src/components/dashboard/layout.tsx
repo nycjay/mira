@@ -1,4 +1,17 @@
-import { BookOpen, Brain, Database, GitFork, LayoutDashboard, LogOut, Moon, Package, Settings, ShieldAlert, Sun, Users } from "lucide-react"
+import {
+  BookOpen,
+  Brain,
+  Database,
+  GitFork,
+  LayoutDashboard,
+  LogOut,
+  Moon,
+  Package,
+  Settings,
+  ShieldAlert,
+  Sun,
+  Users,
+} from "lucide-react"
 import { useEffect, useState } from "react"
 import { NavLink, Outlet, useLocation } from "react-router"
 
@@ -53,6 +66,7 @@ const PAGE_LABELS: Record<string, string> = {
   learnings: "Learnings",
   settings: "Settings",
   users: "Users",
+  new: "New",
 }
 
 function AppBreadcrumb() {
@@ -71,8 +85,7 @@ function AppBreadcrumb() {
     )
   }
 
-  const label = (part: string) =>
-    PAGE_LABELS[part] || decodeURIComponent(part)
+  const label = (part: string) => PAGE_LABELS[part] || decodeURIComponent(part)
 
   // /repos/{owner}/{repo} doesn't have a real /repos/{owner} route, so the
   // owner segment links back to the repos list with that owner pre-filtered.
@@ -107,7 +120,7 @@ export function DashboardLayout() {
   const { user } = useAuth()
 
   const visibleNav = navItems.filter(
-    (item) => !("adminOnly" in item && item.adminOnly) || user?.is_admin,
+    (item) => !("adminOnly" in item && item.adminOnly) || user?.is_admin
   )
 
   // Fetch the running Mira version once on mount and render it next to the
@@ -132,8 +145,16 @@ export function DashboardLayout() {
               <SidebarMenuButton size="lg" asChild>
                 <a href="/">
                   <div className="flex aspect-square size-8 items-center justify-center">
-                    <img src="/logo.png" alt="Mira" className="hidden size-7 dark:block" />
-                    <img src="/logo-light.png" alt="Mira" className="size-7 dark:hidden" />
+                    <img
+                      src="/logo.png"
+                      alt="Mira"
+                      className="hidden size-7 dark:block"
+                    />
+                    <img
+                      src="/logo-light.png"
+                      alt="Mira"
+                      className="size-7 dark:hidden"
+                    />
                   </div>
                   <div className="flex flex-col leading-tight">
                     <span className="text-sm font-semibold">Mira</span>
@@ -240,11 +261,7 @@ function ThemeToggle() {
 
   return (
     <SidebarMenuButton size="sm" onClick={next}>
-      {isDark ? (
-        <Moon className="h-4 w-4" />
-      ) : (
-        <Sun className="h-4 w-4" />
-      )}
+      {isDark ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
       <span className="text-xs">{isDark ? "Dark" : "Light"}</span>
     </SidebarMenuButton>
   )

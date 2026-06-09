@@ -107,9 +107,16 @@ export function UsersPage() {
                   </TableCell>
                   <TableCell>
                     {u.is_admin ? (
-                      <Badge variant="secondary">Admin</Badge>
+                      <Badge variant="secondary" className="ring-1 ring-border">
+                        Admin
+                      </Badge>
                     ) : (
-                      <Badge variant="outline">User</Badge>
+                      <Badge
+                        variant="secondary"
+                        className="bg-transparent ring-1 ring-border"
+                      >
+                        User
+                      </Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-right">

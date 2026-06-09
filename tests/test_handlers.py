@@ -204,9 +204,7 @@ async def test_failed_review_fires_review_failed(
 ) -> None:
     """A review that raises fires review.failed (and not review.completed)."""
     mock_config.return_value = MagicMock()
-    mock_dispatch = await _run_pr_handler(
-        RuntimeError("boom"), mock_engine_cls, mock_app_auth
-    )
+    mock_dispatch = await _run_pr_handler(RuntimeError("boom"), mock_engine_cls, mock_app_auth)
 
     events = _events(mock_dispatch)
     assert "review.failed" in events

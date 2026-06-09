@@ -130,9 +130,7 @@ class TestDeliverOne:
     async def test_server_error_retries_once(self):
         factory, client = _mock_httpx(status=500)
         with patch("mira.outbound_webhooks.httpx.AsyncClient", factory):
-            ok, _ = await nf.deliver_one(
-                {"url": "https://example.com/h"}, nf.REVIEW_COMPLETED, {}
-            )
+            ok, _ = await nf.deliver_one({"url": "https://example.com/h"}, nf.REVIEW_COMPLETED, {})
         assert ok is False
         assert client.post.call_count == 2  # 5xx retried once
 
@@ -150,9 +148,7 @@ class TestDeliverOne:
     async def test_internal_url_blocked_without_request(self, url):
         factory, client = _mock_httpx(status=200)
         with patch("mira.outbound_webhooks.httpx.AsyncClient", factory):
-            ok, detail = await nf.deliver_one(
-                {"url": url}, nf.REVIEW_COMPLETED, {}
-            )
+            ok, detail = await nf.deliver_one({"url": url}, nf.REVIEW_COMPLETED, {})
         assert ok is False
         assert "private or internal" in detail
         assert client.post.call_count == 0  # never even attempted
@@ -178,8 +174,18 @@ class TestDispatch:
     async def test_only_enabled_and_subscribed(self, in_memory_db: AppDatabase):
         in_memory_db.set_webhooks(
             [
-                {"id": "a", "url": "https://a.com", "events": [nf.REVIEW_COMPLETED], "enabled": True},
-                {"id": "b", "url": "https://b.com", "events": [nf.REVIEW_COMPLETED], "enabled": False},
+                {
+                    "id": "a",
+                    "url": "https://a.com",
+                    "events": [nf.REVIEW_COMPLETED],
+                    "enabled": True,
+                },
+                {
+                    "id": "b",
+                    "url": "https://b.com",
+                    "events": [nf.REVIEW_COMPLETED],
+                    "enabled": False,
+                },
                 {"id": "c", "url": "https://c.com", "events": [nf.REVIEW_FAILED], "enabled": True},
             ]
         )
@@ -218,7 +224,8 @@ class TestAdminEndpoints:
     def test_create_masks_and_lists(self, in_memory_db: AppDatabase):
         created = create_webhook(
             WebhookCreate(
-                name="eng", url="https://hooks.slack.com/services/T/B/secret123",
+                name="eng",
+                url="https://hooks.slack.com/services/T/B/secret123",
                 events=[nf.REVIEW_COMPLETED],
             ),
             _admin(),
@@ -273,9 +280,7 @@ class TestAdminEndpoints:
             WebhookCreate(name="eng", url="https://a.com/original", events=[nf.REVIEW_COMPLETED]),
             _admin(),
         )
-        update_webhook(
-            created["id"], WebhookUpdate(events=[nf.REVIEW_FAILED], url=""), _admin()
-        )
+        update_webhook(created["id"], WebhookUpdate(events=[nf.REVIEW_FAILED], url=""), _admin())
         stored = in_memory_db.get_webhooks()[0]
         assert stored["url"] == "https://a.com/original"  # unchanged
         assert stored["events"] == [nf.REVIEW_FAILED]

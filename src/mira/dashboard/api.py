@@ -594,7 +594,11 @@ def create_webhook(body: WebhookCreate, request: Request) -> dict:
 
     try:
         cfg = WebhookConfig(
-            id=uuid.uuid4().hex, name=body.name, url=body.url, events=body.events, enabled=body.enabled
+            id=uuid.uuid4().hex,
+            name=body.name,
+            url=body.url,
+            events=body.events,
+            enabled=body.enabled,
         )
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc.errors()[0].get("msg"))) from exc
@@ -926,9 +930,7 @@ async def _run_initial_indexing(default_mode: str) -> None:
             logger.info("Indexed %s: %d files", full_name, count)
             from mira.outbound_webhooks import INDEXING_COMPLETED, dispatch_event
 
-            await dispatch_event(
-                INDEXING_COMPLETED, {"repo": full_name, "files_indexed": count}
-            )
+            await dispatch_event(INDEXING_COMPLETED, {"repo": full_name, "files_indexed": count})
         except Exception as exc:
             _app_db.set_repo_status(repo_record.owner, repo_record.repo, "failed", error=str(exc))
             tracker.fail(full_name, str(exc))
@@ -2082,9 +2084,7 @@ async def trigger_index(owner: str, repo: str, full: bool = False) -> dict:
             )
             from mira.outbound_webhooks import INDEXING_COMPLETED, dispatch_event
 
-            await dispatch_event(
-                INDEXING_COMPLETED, {"repo": full_name, "files_indexed": count}
-            )
+            await dispatch_event(INDEXING_COMPLETED, {"repo": full_name, "files_indexed": count})
         except IndexingCancelled as cancelled:
             tracker.cancel(full_name, cancelled.files_indexed)
             logger.info(

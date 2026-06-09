@@ -265,9 +265,7 @@ async def dispatch_event(event: str, data: dict[str, Any]) -> None:
         logger.debug("dispatch_event: no webhooks available (%s)", exc)
         return
 
-    targets = [
-        w for w in webhooks if w.get("enabled", True) and event in (w.get("events") or [])
-    ]
+    targets = [w for w in webhooks if w.get("enabled", True) and event in (w.get("events") or [])]
     for webhook in targets:
         ok, detail = await deliver_one(webhook, event, data)
         if ok:

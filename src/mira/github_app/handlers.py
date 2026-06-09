@@ -149,7 +149,7 @@ async def handle_pull_request(
         # Fire outbound webhooks (Slack/Teams/generic). Guarded internally —
         # a webhook failure never affects the review that already landed.
         from mira.models import Severity, build_review_stats
-        from mira.notifications import (
+        from mira.outbound_webhooks import (
             REVIEW_COMPLETED,
             REVIEW_HIGH_SEVERITY,
             dispatch_event,
@@ -171,7 +171,7 @@ async def handle_pull_request(
     except Exception as exc:
         logger.exception("Error handling pull_request event")
         if pr_url:
-            from mira.notifications import REVIEW_FAILED, dispatch_event
+            from mira.outbound_webhooks import REVIEW_FAILED, dispatch_event
 
             await dispatch_event(
                 REVIEW_FAILED,

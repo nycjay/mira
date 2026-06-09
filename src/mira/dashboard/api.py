@@ -539,7 +539,7 @@ def _require_admin(request: Request) -> None:
 
 def _webhook_public(w: dict) -> dict:
     """Webhook with its URL masked — safe to return from the API."""
-    from mira.notifications import detect_format, mask_url
+    from mira.outbound_webhooks import detect_format, mask_url
 
     return {
         "id": w.get("id", ""),
@@ -554,7 +554,7 @@ def _webhook_public(w: dict) -> dict:
 @router.get("/api/admin/webhooks")
 def list_webhooks(request: Request) -> dict:
     _require_admin(request)
-    from mira.notifications import AVAILABLE_EVENTS
+    from mira.outbound_webhooks import AVAILABLE_EVENTS
 
     webhooks = [_webhook_public(w) for w in _app_db.get_webhooks()]
     return {"webhooks": webhooks, "available_events": AVAILABLE_EVENTS}
@@ -568,7 +568,7 @@ def get_webhook(webhook_id: str, request: Request) -> dict:
     editing a webhook needs the real value populated in the form.
     """
     _require_admin(request)
-    from mira.notifications import detect_format
+    from mira.outbound_webhooks import detect_format
 
     w = next((x for x in _app_db.get_webhooks() if x.get("id") == webhook_id), None)
     if w is None:
@@ -590,7 +590,7 @@ def create_webhook(body: WebhookCreate, request: Request) -> dict:
 
     from pydantic import ValidationError
 
-    from mira.notifications import WebhookConfig
+    from mira.outbound_webhooks import WebhookConfig
 
     try:
         cfg = WebhookConfig(
@@ -610,7 +610,7 @@ def update_webhook(webhook_id: str, body: WebhookUpdate, request: Request) -> di
     _require_admin(request)
     from pydantic import ValidationError
 
-    from mira.notifications import WebhookConfig
+    from mira.outbound_webhooks import WebhookConfig
 
     webhooks = _app_db.get_webhooks()
     existing = next((w for w in webhooks if w.get("id") == webhook_id), None)
@@ -651,7 +651,7 @@ def delete_webhook(webhook_id: str, request: Request) -> dict:
 @router.post("/api/admin/webhooks/{webhook_id}/test")
 async def test_webhook(webhook_id: str, request: Request) -> dict:
     _require_admin(request)
-    from mira.notifications import REVIEW_COMPLETED, deliver_one, sample_data
+    from mira.outbound_webhooks import REVIEW_COMPLETED, deliver_one, sample_data
 
     webhook = next((w for w in _app_db.get_webhooks() if w.get("id") == webhook_id), None)
     if webhook is None:
@@ -924,7 +924,7 @@ async def _run_initial_indexing(default_mode: str) -> None:
             )
             tracker.complete(full_name, count)
             logger.info("Indexed %s: %d files", full_name, count)
-            from mira.notifications import INDEXING_COMPLETED, dispatch_event
+            from mira.outbound_webhooks import INDEXING_COMPLETED, dispatch_event
 
             await dispatch_event(
                 INDEXING_COMPLETED, {"repo": full_name, "files_indexed": count}
@@ -2080,7 +2080,7 @@ async def trigger_index(owner: str, repo: str, full: bool = False) -> dict:
             logger.info(
                 "Index %s for %s: %d files", "rebuild" if full else "update", full_name, count
             )
-            from mira.notifications import INDEXING_COMPLETED, dispatch_event
+            from mira.outbound_webhooks import INDEXING_COMPLETED, dispatch_event
 
             await dispatch_event(
                 INDEXING_COMPLETED, {"repo": full_name, "files_indexed": count}

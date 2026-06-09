@@ -15,7 +15,7 @@ import httpx
 import pytest
 from fastapi import HTTPException
 
-from mira import notifications as nf
+from mira import outbound_webhooks as nf
 from mira.dashboard.api import (
     WebhookCreate,
     WebhookUpdate,
@@ -46,7 +46,7 @@ def _non_admin() -> SimpleNamespace:
 
 
 def _mock_httpx(status: int = 200, side_effect=None):
-    """Return (factory, client) to patch `mira.notifications.httpx.AsyncClient`."""
+    """Return (factory, client) to patch `mira.outbound_webhooks.httpx.AsyncClient`."""
     client = MagicMock()
     if side_effect is not None:
         client.post = AsyncMock(side_effect=side_effect)
@@ -105,7 +105,7 @@ class TestRender:
 class TestDeliverOne:
     async def test_success(self):
         factory, client = _mock_httpx(status=200)
-        with patch("mira.notifications.httpx.AsyncClient", factory):
+        with patch("mira.outbound_webhooks.httpx.AsyncClient", factory):
             ok, detail = await nf.deliver_one(
                 {"url": "https://example.com/h"}, nf.REVIEW_COMPLETED, {}
             )
@@ -115,7 +115,7 @@ class TestDeliverOne:
 
     async def test_client_error_no_retry(self):
         factory, client = _mock_httpx(status=404)
-        with patch("mira.notifications.httpx.AsyncClient", factory):
+        with patch("mira.outbound_webhooks.httpx.AsyncClient", factory):
             ok, detail = await nf.deliver_one(
                 {"url": "https://example.com/h"}, nf.REVIEW_COMPLETED, {}
             )
@@ -125,7 +125,7 @@ class TestDeliverOne:
 
     async def test_server_error_retries_once(self):
         factory, client = _mock_httpx(status=500)
-        with patch("mira.notifications.httpx.AsyncClient", factory):
+        with patch("mira.outbound_webhooks.httpx.AsyncClient", factory):
             ok, _ = await nf.deliver_one(
                 {"url": "https://example.com/h"}, nf.REVIEW_COMPLETED, {}
             )
@@ -134,7 +134,7 @@ class TestDeliverOne:
 
     async def test_network_error_swallowed(self):
         factory, _ = _mock_httpx(side_effect=httpx.ConnectError("boom"))
-        with patch("mira.notifications.httpx.AsyncClient", factory):
+        with patch("mira.outbound_webhooks.httpx.AsyncClient", factory):
             ok, detail = await nf.deliver_one(
                 {"url": "https://example.com/h"}, nf.REVIEW_COMPLETED, {}
             )
@@ -152,7 +152,7 @@ class TestDispatch:
             ]
         )
         factory, client = _mock_httpx(status=200)
-        with patch("mira.notifications.httpx.AsyncClient", factory):
+        with patch("mira.outbound_webhooks.httpx.AsyncClient", factory):
             await nf.dispatch_event(nf.REVIEW_COMPLETED, {"repo": "x/y"})
         # Only webhook "a" qualifies (enabled + subscribed).
         assert client.post.call_count == 1
@@ -162,7 +162,7 @@ class TestDispatch:
             [{"id": "a", "url": "https://a.com", "events": [nf.REVIEW_COMPLETED], "enabled": True}]
         )
         factory, _ = _mock_httpx(side_effect=httpx.ConnectError("boom"))
-        with patch("mira.notifications.httpx.AsyncClient", factory):
+        with patch("mira.outbound_webhooks.httpx.AsyncClient", factory):
             # Must not raise.
             await nf.dispatch_event(nf.REVIEW_COMPLETED, {"repo": "x/y"})
 
@@ -265,7 +265,7 @@ class TestAdminEndpoints:
             _admin(),
         )
         factory, client = _mock_httpx(status=200)
-        with patch("mira.notifications.httpx.AsyncClient", factory):
+        with patch("mira.outbound_webhooks.httpx.AsyncClient", factory):
             res = await run_webhook_test(created["id"], _admin())
         assert res["ok"] is True
         assert client.post.call_count == 1

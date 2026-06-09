@@ -73,9 +73,6 @@ export function WebhookFormPage() {
             setEnabled(w.enabled)
             setUrlPlaceholder(`${w.url_masked} — leave blank to keep`)
           }
-        } else {
-          // Pre-select the primary event so a new webhook is useful by default.
-          setSelected(data.available_events.slice(0, 1).map((e) => e.value))
         }
         setLoading(false)
       })
@@ -176,7 +173,7 @@ export function WebhookFormPage() {
                 </label>
                 <Input
                   id="wh-name"
-                  placeholder="#eng-reviews"
+                  placeholder="e.g. Engineering reviews"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
@@ -197,13 +194,6 @@ export function WebhookFormPage() {
                   payload.
                 </p>
               </div>
-              <label className="flex w-fit items-center gap-2 text-sm">
-                <Checkbox
-                  checked={enabled}
-                  onCheckedChange={(v) => setEnabled(Boolean(v))}
-                />
-                Enabled
-              </label>
             </CardContent>
           </Card>
 

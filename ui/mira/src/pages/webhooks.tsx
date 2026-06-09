@@ -79,6 +79,11 @@ export function WebhooksPage() {
     setRefreshKey((k) => k + 1)
   }
 
+  const toggleEnabled = async (w: Webhook) => {
+    await api.updateWebhook(w.id, { enabled: !w.enabled })
+    setRefreshKey((k) => k + 1)
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-start justify-between gap-4">
@@ -170,12 +175,19 @@ export function WebhooksPage() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      {w.enabled ? (
-                        <Badge variant="secondary">Active</Badge>
-                      ) : (
-                        <Badge variant="outline">Disabled</Badge>
-                      )}
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => toggleEnabled(w)}
+                        title={w.enabled ? "Disable" : "Enable"}
+                        className="cursor-pointer"
+                      >
+                        {w.enabled ? (
+                          <Badge variant="secondary">Active</Badge>
+                        ) : (
+                          <Badge variant="outline">Disabled</Badge>
+                        )}
+                      </button>
                     </TableCell>
                     <TableCell
                       className="text-right"

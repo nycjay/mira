@@ -12,6 +12,7 @@ its own exceptions and logs instead of propagating.
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import time
 from typing import Any
@@ -183,6 +184,33 @@ def render(event: str, data: dict[str, Any], fmt: str) -> dict[str, Any]:
 # ── Delivery ─────────────────────────────────────────────────────────────────
 
 
+def is_safe_webhook_url(url: str) -> bool:
+    """Best-effort SSRF guard run before delivery.
+
+    Rejects ``localhost`` and any private / loopback / link-local / reserved IP
+    *literal* so an admin can't point a webhook at internal services or a cloud
+    metadata endpoint (e.g. ``169.254.169.254``). Hostnames are intentionally
+    not resolved — named internal services (e.g. a docker-compose ``mattermost``
+    host) stay usable on self-hosted deployments; this only blocks the obvious
+    raw-IP probe vectors.
+    """
+    host = (urlparse(url).hostname or "").lower()
+    if not host or host == "localhost":
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return True  # not an IP literal — a hostname; allow without resolving
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
 async def deliver_one(
     webhook: dict[str, Any], event: str, data: dict[str, Any]
 ) -> tuple[bool, str]:
@@ -195,6 +223,8 @@ async def deliver_one(
     url = webhook.get("url", "")
     if not url:
         return False, "missing url"
+    if not is_safe_webhook_url(url):
+        return False, "URL points to a private or internal address"
     fmt = detect_format(url)
     payload = render(event, data, fmt)
 

@@ -136,6 +136,34 @@ class TestDeliverOne:
         assert ok is False
         assert client.post.call_count == 2  # 5xx retried once
 
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://localhost:8080/x",
+            "http://127.0.0.1/x",
+            "http://169.254.169.254/latest/meta-data",
+            "http://10.0.0.5/x",
+            "http://192.168.1.10/x",
+            "http://[::1]/x",
+        ],
+    )
+    async def test_internal_url_blocked_without_request(self, url):
+        factory, client = _mock_httpx(status=200)
+        with patch("mira.outbound_webhooks.httpx.AsyncClient", factory):
+            ok, detail = await nf.deliver_one(
+                {"url": url}, nf.REVIEW_COMPLETED, {}
+            )
+        assert ok is False
+        assert "private or internal" in detail
+        assert client.post.call_count == 0  # never even attempted
+
+    def test_safe_url_helper(self):
+        assert nf.is_safe_webhook_url("https://hooks.slack.com/x") is True
+        # Named internal hosts are allowed (not resolved); only IP literals blocked.
+        assert nf.is_safe_webhook_url("http://mattermost:8065/hooks/x") is True
+        assert nf.is_safe_webhook_url("http://localhost/x") is False
+        assert nf.is_safe_webhook_url("http://169.254.169.254/") is False
+
     async def test_network_error_swallowed(self):
         factory, _ = _mock_httpx(side_effect=httpx.ConnectError("boom"))
         with patch("mira.outbound_webhooks.httpx.AsyncClient", factory):

@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { WebhooksCard } from "@/components/settings/webhooks-card"
 import { api } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
 
@@ -477,6 +478,8 @@ export function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <WebhooksCard />
     </div>
   )
 }

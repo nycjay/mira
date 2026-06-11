@@ -70,15 +70,20 @@ def get_user(user_id):
 
     @pytest.mark.asyncio
     async def test_eval_catches_race_condition(self) -> None:
+        # A concurrent HTTP endpoint doing check-then-deduct on a shared balance
+        # is an unambiguous TOCTOU — two requests can both pass the check before
+        # either deducts. The earlier fixture was bare sequential code with no
+        # concurrency signal, so the model legitimately stayed quiet.
         code = """
-balance = get_balance(account_id)
-if balance >= amount:
-    deduct(account_id, amount)
-    transfer(target_id, amount)
+@app.post("/withdraw")
+async def withdraw(account_id, target_id, amount):
+    balance = get_balance(account_id)
+    if balance >= amount:
+        deduct(account_id, amount)
+        transfer(target_id, amount)
 """
-        # Probabilistic: TOCTOU detection across a multi-line span is sensitive
-        # to which lines the model cites. Retry up to N — overcomes per-call
-        # variance without lowering the keyword bar.
+        # Still probabilistic across a multi-line span — retry up to N to
+        # overcome per-call variance without lowering the keyword bar.
         engine = _make_engine()
         diff = _make_diff("transfer.py", code)
         kws = ["race", "concurrent", "atomic", "toctou"]

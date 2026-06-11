@@ -114,6 +114,10 @@ _UNIVERSAL: list[str] = [
     "**TOCTOU (Time-of-Check-to-Time-of-Use)** — counting/checking a value then writing it "
     "is a race. Two concurrent requests can both pass the check before either writes. Use "
     "atomic upsert / unique constraint / advisory lock.",
+    "**Unreleased resources** — a file, socket, DB connection/cursor, or lock acquired without "
+    "a scoped-release construct (`with` / `defer` / try-finally) leaks when an exception or early "
+    "return skips the close. Flag handles opened and never closed, and closes that only run on "
+    "the happy path.",
 ]
 
 

@@ -11,6 +11,7 @@ import {
   Pencil,
   Plus,
   Power,
+  RefreshCw,
   Search,
   X,
 } from "lucide-react"
@@ -262,6 +263,16 @@ export function LearnedRulesPage() {
           ))}
         </SelectContent>
       </Select>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={refresh}
+        disabled={loading}
+        title="Refresh"
+      >
+        <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+        Refresh
+      </Button>
     </div>
   )
 

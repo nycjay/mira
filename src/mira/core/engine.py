@@ -915,14 +915,14 @@ class ReviewEngine:
                 _rules_store.close()
 
                 try:
-                    from mira.dashboard.db import AppDatabase
+                    from mira.dashboard.api import _app_db
 
-                    _app_db = AppDatabase()
-                    for rule_text in _app_db.get_global_rules_text():
-                        parts = rule_text.split(": ", 1)
-                        title = parts[0] if len(parts) > 1 else "Global Rule"
-                        content = parts[1] if len(parts) > 1 else rule_text
-                        custom_rules.insert(0, {"title": title, "content": content})
+                    if _app_db is not None:
+                        for rule_text in _app_db.get_global_rules_text():
+                            parts = rule_text.split(": ", 1)
+                            title = parts[0] if len(parts) > 1 else "Global Rule"
+                            content = parts[1] if len(parts) > 1 else rule_text
+                            custom_rules.insert(0, {"title": title, "content": content})
                 except Exception:
                     pass
         except Exception:

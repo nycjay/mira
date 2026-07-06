@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from mira.llm import registry
 
 
@@ -60,3 +62,38 @@ class TestRegistryRegression:
         review = registry.models_for_purpose("review")
         values = [m["value"] for m in review]
         assert "anthropic/claude-sonnet-4-6" in values
+
+
+class TestCurrentGenerationModels:
+    """GPT-5.x / Gemini 3.x additions (issue #125) — ids and pricing verified
+    against the live OpenRouter catalog."""
+
+    @pytest.mark.parametrize(
+        ("model_id", "pricing", "purposes"),
+        [
+            ("openai/gpt-4.1-mini", (0.40, 1.60), ["indexing"]),
+            ("openai/gpt-5-nano", (0.05, 0.40), ["indexing"]),
+            ("openai/gpt-5-mini", (0.25, 2.00), ["indexing", "review"]),
+            ("openai/gpt-5.1-codex-mini", (0.25, 2.00), ["indexing", "review"]),
+            ("openai/gpt-5.1-codex", (1.25, 10.00), ["review"]),
+            ("google/gemini-3-flash-preview", (0.50, 3.00), ["indexing", "review"]),
+            ("google/gemini-3.1-flash-lite", (0.25, 1.50), ["indexing"]),
+        ],
+    )
+    def test_registered_with_pricing_and_purposes(self, model_id, pricing, purposes):
+        assert registry.pricing(model_id) == pricing
+        for purpose in purposes:
+            assert registry.is_supported(model_id, purpose=purpose)
+            assert model_id in [m["value"] for m in registry.models_for_purpose(purpose)]
+
+    def test_recommended_defaults_unchanged(self):
+        indexing = registry.models_for_purpose("indexing")
+        review = registry.models_for_purpose("review")
+        assert [m["value"] for m in indexing if m["recommended"]] == [
+            "anthropic/claude-haiku-4-5",
+            "us.anthropic.claude-haiku-4-5-v1:0",
+        ]
+        assert [m["value"] for m in review if m["recommended"]] == [
+            "anthropic/claude-sonnet-4-6",
+            "us.anthropic.claude-sonnet-4-6-v1:0",
+        ]

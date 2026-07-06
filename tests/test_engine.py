@@ -1665,3 +1665,50 @@ class TestDropOrphanKeyIssues:
     def test_empty_key_issues_returns_empty(self):
         comments = [self._comment(line=10)]
         assert _drop_orphan_key_issues([], comments) == []
+
+
+class TestGlobalRules:
+    """Global rules must come from the shared app DB (issue #123), not a
+    throwaway SQLite AppDatabase() that ignores DATABASE_URL."""
+
+    def _capture_build(self):
+        from mira.llm.prompts.review import build_review_prompt
+
+        return patch("mira.core.engine.build_review_prompt", wraps=build_review_prompt)
+
+    @pytest.mark.asyncio
+    async def test_global_rules_read_from_shared_app_db(
+        self, mock_llm, mock_provider, monkeypatch, tmp_path
+    ):
+        monkeypatch.setenv("MIRA_INDEX_DIR", str(tmp_path))
+
+        mock_db = MagicMock()
+        mock_db.get_global_rules_text.return_value = ["Security: Never log tokens"]
+        mock_db.get_last_reviewed_sha.return_value = ""
+        mock_db.get_repo.return_value = None
+        monkeypatch.setattr("mira.dashboard.api._app_db", mock_db)
+
+        engine = ReviewEngine(config=MiraConfig(), llm=mock_llm, provider=mock_provider)
+        with self._capture_build() as mock_build:
+            await engine.review_pr("https://github.com/test/repo/pull/1")
+
+        _, kwargs = mock_build.call_args_list[0]
+        assert kwargs["custom_rules"][0] == {
+            "title": "Security",
+            "content": "Never log tokens",
+        }
+        # No throwaway AppDatabase() → no stray SQLite file in the index dir.
+        assert not (tmp_path / "_app.db").exists()
+
+    @pytest.mark.asyncio
+    async def test_no_app_db_degrades_cleanly(self, mock_llm, mock_provider, monkeypatch, tmp_path):
+        monkeypatch.setenv("MIRA_INDEX_DIR", str(tmp_path))
+        monkeypatch.setattr("mira.dashboard.api._app_db", None)
+
+        engine = ReviewEngine(config=MiraConfig(), llm=mock_llm, provider=mock_provider)
+        with self._capture_build() as mock_build:
+            await engine.review_pr("https://github.com/test/repo/pull/1")
+
+        _, kwargs = mock_build.call_args_list[0]
+        assert not kwargs["custom_rules"]
+        assert not (tmp_path / "_app.db").exists()

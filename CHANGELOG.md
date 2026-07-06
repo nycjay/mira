@@ -4,6 +4,24 @@ All notable changes to Mira are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-07-06
+
+### Added
+
+- **Activity page** — an org-wide feed of PR reviews with a filterable table and a per-PR detail timeline. (#145, #146, #147 — already in the 0.4.1 betas.)
+- **Backend-aware, searchable model pickers** — the dashboard's model dropdowns are now search bars that list the configured backend's live catalog (OpenRouter's tool-capable models, your Bedrock account's inference profiles, or a generic endpoint's `/models`), cached for an hour with the bundled registry as fallback. Any free-form model id can be typed directly, matching `mira.yaml`'s flexibility, and an **Inherit from deployment config** choice clears the dashboard override so `mira.yaml` is authoritative again. The effective model and its source (`dashboard setting` vs `mira.yaml`) are logged on every review, so an override is never silent. Closes #124.
+- **Current-generation models in the registry** — GPT-5 Nano/Mini, GPT-5.1 Codex/Codex Mini, GPT-4.1 Mini, Gemini 3 Flash (Preview), and Gemini 3.1 Flash Lite, with pricing verified against the live OpenRouter catalog. Closes #125.
+
+### Changed
+
+- **`llm.base_url` is validated at config load** — non-http(s) schemes are rejected, and plain `http://` is allowed only for local endpoints (localhost, private IPs, dotless hostnames like docker-compose services); public hosts must use `https://`. A failed API-key lookup during a model-catalog fetch is now logged instead of silently sending an unauthenticated request.
+
+### Fixed
+
+- **Discord webhooks work via the Slack-compatible endpoint** — a `discord.com/api/webhooks/{id}/{token}/slack` URL is now detected as Slack format instead of falling through to generic JSON (which Discord rejects). Bare Discord URLs stay generic on purpose, so the test button surfaces the mismatch instead of silently guessing. Closes #158.
+- **Dependency-bump pushes refresh the vulnerability inventory** — push-triggered incremental indexing skipped manifests/lockfiles entirely (they're excluded from code indexing), so merging a lockfile-only PR left `package_manifests` stale and the Vulnerabilities page kept flagging already-fixed advisories until a full re-index. `index_diff` now routes changed/removed manifests through the same parse-and-store pass the full indexer uses and fires an immediate OSV poll. Closes #157.
+- **Global rules now reach reviews on Postgres deployments** — the review engine read global rules from a throwaway SQLite `AppDatabase()` instead of the configured `DATABASE_URL` backend, so dashboard-stored rules were silently ignored, a stray `_app.db` (with a default-password admin) was created in the index dir, and a DB connection leaked on every review. It now reuses the server's configured instance. Closes #123.
+
 ## [0.4.0] — 2026-06-14
 
 ### Added

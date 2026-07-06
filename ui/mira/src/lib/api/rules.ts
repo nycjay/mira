@@ -6,7 +6,7 @@ export const rulesApi = {
   // Learned rules. status: "approved" | "pending" | "rejected" | "" (all)
   listLearnedRules: (status = "") =>
     fetchJson<OrgLearnedRuleModel[]>(
-      status ? `/api/learned-rules?status=${status}` : `/api/learned-rules`
+      status ? `/api/learned-rules?status=${encodeURIComponent(status)}` : `/api/learned-rules`
     ),
 
   listRepoLearnedRules: (owner: string, repo: string) =>

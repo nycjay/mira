@@ -801,8 +801,11 @@ class IndexStore(_StoreSharedMixin):
             ),
         )
         self._conn.commit()
+        row_id = cur.lastrowid
+        if row_id is None:
+            raise RuntimeError("INSERT into feedback_events did not return a row id")
         return FeedbackEventRow(
-            id=cur.lastrowid or 0,
+            id=row_id,
             pr_number=pr_number,
             pr_url=pr_url,
             comment_path=comment_path,
@@ -927,8 +930,11 @@ class IndexStore(_StoreSharedMixin):
             (rule_text, source_signal, category, path_pattern, sample_count, status, now, now),
         )
         self._conn.commit()
+        row_id = cur.lastrowid
+        if row_id is None:
+            raise RuntimeError("INSERT into learned_rules did not return a row id")
         return LearnedRuleRow(
-            id=cur.lastrowid or 0,
+            id=row_id,
             rule_text=rule_text,
             source_signal=source_signal,
             category=category,
@@ -1017,7 +1023,10 @@ class IndexStore(_StoreSharedMixin):
             ),
         )
         self._conn.commit()
-        return self.get_learned_rule(cur.lastrowid or 0)  # type: ignore[return-value]
+        row_id = cur.lastrowid
+        if row_id is None:
+            raise RuntimeError("INSERT into learned_rules did not return a row id")
+        return self.get_learned_rule(row_id)  # type: ignore[return-value]
 
     def update_learned_rule(
         self, rule_id: int, rule_text: str, category: str, path_pattern: str

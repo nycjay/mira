@@ -3,12 +3,14 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router"
 
 import { DashboardLayout } from "@/components/dashboard/layout"
 import { SetupModal } from "@/components/dashboard/setup-modal"
+import { Toaster } from "@/components/ui/sonner"
 import { UninstallModal } from "@/components/dashboard/uninstall-modal"
 import { api } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
 import { ActivityPage } from "@/pages/activity"
 import { DashboardPage } from "@/pages/dashboard"
 import { LearnedRulesPage } from "@/pages/learned-rules"
+import { LearningFormPage } from "@/pages/learning-form"
 import { LoginPage } from "@/pages/login"
 import { PackagesPage } from "@/pages/packages"
 import { RepoDetailPage } from "@/pages/repo-detail"
@@ -176,6 +178,7 @@ function AppShell() {
 export function App() {
   return (
     <BrowserRouter>
+      <Toaster />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route
@@ -203,6 +206,8 @@ export function App() {
           <Route path="relationships" element={<RelationshipsPage />} />
           <Route path="rules" element={<RulesPage />} />
           <Route path="learnings" element={<LearnedRulesPage />} />
+          <Route path="learnings/new" element={<LearningFormPage />} />
+          <Route path="learnings/edit" element={<LearningFormPage />} />
           <Route path="vulnerabilities" element={<VulnerabilitiesPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="users/new" element={<UserFormPage />} />
